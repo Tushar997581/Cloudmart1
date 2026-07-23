@@ -1,0 +1,42 @@
+name: CloudMart CI/CD
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install Dependencies & Build Frontend
+        run: |
+          cd client
+          npm ci
+          npm run build
+
+      - name: Install Dependencies & Build Backend
+        run: |
+          cd server
+          npm ci
+          npx prisma generate
+          npm run build
+
+      - name: Deploy to AWS EC2
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd /opt/cloudmart
+            git pull origin main
+            docker-compose -f docker-compose.yml up -d --build
+            docker exec cloudmart-server-1 npx prisma migrate deploy
